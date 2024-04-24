@@ -21,7 +21,7 @@ def create_directories(directories, output_path):
             if not os.path.exists(output_path):
                 os.makedirs(output_path)
 
-def fetch_and_save_resource(url, output_path):
+def fetch_and_save_page(url, output_path):
     response = requests.get(url)
 
     domain = url.split('//')[-1]
@@ -33,59 +33,57 @@ def fetch_and_save_resource(url, output_path):
     return response.text
 
 # This function is called by each thread to fetch and save a single resource
-def scrape(url, resources, images, output_path):
-    if not resources[url]:
-        resources[url] = False
-    if resources[url] == False:
-        response = fetch_and_save_resource(url, output_path)
-        (current_resources, current_images, current_scripts, current_styles) = parse_html(response)
+def scrape(url, pages, resources, output_path):
+    if not pages[url]:
+        pages[url] = False
+    if pages[url] == False:
+        response = fetch_and_save_page(url, output_path)
+        (current_pages, current_images, current_scripts, current_styles) = parse_html(response)
 
-        for resource in current_resources:
-            if resource not in resources:
+        for resource in current_pages:
+            if resource not in pages:
                 print(f'Found new resource {resource}')
-                #TODO(Aston): Rename resources-list to pages-list
-                resources[resource] = False
+                pages[resource] = False
 
         for image in current_images:
-            if image not in images:
+            if image not in resources:
                 print(f'Found new image {image}')
                 #TODO(Aston): Save the image to a file
-                images.add(image)
+                resources.add(image)
 
         for script in current_scripts:
-            if script not in images:
+            if script not in resources:
                 print(f'Found new script {script}')
                 #TODO(Aston): Download the script resource
-                #TODO(Aston): Rename images-list to resources-list
-                images.add(script)
+                resources.add(script)
 
         for style in current_styles:
-            if style not in images:
+            if style not in resources:
                 print(f'Found new style {style}')
                 #TODO(Aston): Download the style resource
-                images.add(style)
+                resources.add(style)
 
         # The page has been visited
-        resources[url] = True
+        pages[url] = True
 
 def scrape_website(url, output_path):
     print(f'{25*'-'} WEB SCRAPER {25*'-'}')
     print(f'Scraping {url} and saving the output to {output_path}')
 
     # Create a dictionary to store resources, and whether they have already been visited
-    resources = {url : False} # Add front page
-    remainingResources = [url]
-    images = set()
+    pages = {url : False} # Add front page
+    remainingPages = [url]
+    resources = set()
     threads = []
 
     # Iterate over the resources and start a new thread for each resource, possibly using a queue for scalability
     #TODO(Aston): Add traversal through whole website (while remainingResources: )
-    for resource in remainingResources:
-        print(f'Fetching resource {resource}')
-        thread = threading.Thread(target=scrape, args=(resource, resources, images, output_path))
+    for page in remainingPages:
+        print(f'Fetching resource {page}')
+        thread = threading.Thread(target=scrape, args=(page, pages, resources, output_path))
         thread.start()
         threads.append(thread)
-    remainingResources = [resource for resource, isVisited in resources.items() if not isVisited]
+    remainingPages = [page for page, is_visited in pages.items() if not is_visited]
 
     for thread in tqdm(threads, desc='Fetching resources', unit='resource'):
         thread.join()
