@@ -1,9 +1,20 @@
 import argparse
+import os
+import shutil
 
 from webscraper import scrape_website
 
 def main(args):
+    create_output_path(args.url, args.output)
     scrape_website(args.url, args.output)
+
+def create_output_path(url, output_path):
+    domain = url.split('//')[-1]
+    output_directory = output_path + '/' + domain
+    if os.path.exists(output_directory):
+        input(f'The output path {output_directory} already exists. Press Enter to overwrite the directory and continue, or Ctrl+C to cancel')
+        shutil.rmtree(output_directory)
+    os.makedirs(output_directory)
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='Web Scraper')

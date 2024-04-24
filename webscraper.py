@@ -1,3 +1,4 @@
+import os
 import requests
 import threading
 
@@ -10,17 +11,30 @@ def parse_html(html):
     images = soup.find_all('img')
     return (links, images)
 
-def fetch_and_save_resource(url):
-        response = requests.get(url).text
-        #TODO(Aston): Save the response to a file
-        return response
+def create_directories(directories, output_path):
+    for directory in directories[:-1]:
+        if directory:
+            output_path += directory + '/'
+            if not os.path.exists(output_path):
+                os.makedirs(output_path)
+
+def fetch_and_save_resource(url, output_path):
+    response = requests.get(url)
+
+    domain = url.split('//')[-1]
+    directories = domain.split('/')
+
+    create_directories(directories, output_path)
+
+    open(output_path + '/' + domain + 'index.html', 'wb').write(response.content)
+    return response.text
 
 # This function is called by each thread to fetch and save a single resource
-def scrape(url, resources, images):
+def scrape(url, resources, images, output_path):
     if not resources[url]:
         resources[url] = False
     if resources[url] == False:
-        response = fetch_and_save_resource(url)
+        response = fetch_and_save_resource(url, output_path)
         (new_resources, new_images) = parse_html(response)
 
         for new_resource in new_resources:
@@ -49,7 +63,7 @@ def scrape_website(url, output_path):
     #TODO(Aston): Add traversal through whole website (while remainingResources: )
     for resource in remainingResources:
         print(f'Fetching resource {resource}')
-        thread = threading.Thread(target=scrape, args=(resource, resources, images))
+        thread = threading.Thread(target=scrape, args=(resource, resources, images, output_path))
         thread.start()
         threads.append(thread)
     remainingResources = [resource for resource, isVisited in resources.items() if not isVisited]
