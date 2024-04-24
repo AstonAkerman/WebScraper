@@ -5,8 +5,8 @@ import shutil
 from webscraper import scrape_website
 
 def main(args):
-    create_output_path(args.url, args.output)
-    scrape_website(args.url, args.output)
+    output_directory = create_output_path(args.url, args.output)
+    scrape_website(args.url, output_directory)
 
 def create_output_path(url, output_path):
     domain = url.split('//')[-1]
@@ -15,6 +15,7 @@ def create_output_path(url, output_path):
         input(f'The output path {output_directory} already exists. Press Enter to overwrite the directory and continue, or Ctrl+C to cancel')
         shutil.rmtree(output_directory)
     os.makedirs(output_directory)
+    return output_directory
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='Web Scraper')

@@ -29,8 +29,17 @@ def fetch_and_save_page(url, output_path):
 
     create_directories(directories, output_path)
 
-    open(output_path + '/' + domain + 'index.html', 'wb').write(response.content)
+    open(output_path + 'index.html', 'wb').write(response.content)
     return response.text
+
+def fetch_and_save_image(url, image, output_path):
+    print(f'Found new image {image}')
+
+    image_src = image['src']
+    create_directories(image_src.split('/'), output_path)
+
+    response = requests.get(url + image['src'])
+    open(output_path + image_src, 'wb').write(response.content)
 
 # This function is called by each thread to fetch and save a single resource
 def scrape(url, pages, resources, output_path):
@@ -47,8 +56,7 @@ def scrape(url, pages, resources, output_path):
 
         for image in current_images:
             if image not in resources:
-                print(f'Found new image {image}')
-                #TODO(Aston): Save the image to a file
+                fetch_and_save_image(url, image, output_path)                
                 resources.add(image)
 
         for script in current_scripts:
