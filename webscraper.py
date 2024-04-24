@@ -9,7 +9,10 @@ def parse_html(html):
     soup = BeautifulSoup(html, 'html.parser')
     links = soup.find_all('a')
     images = soup.find_all('img')
-    return (links, images)
+    scripts = soup.find_all('script')
+    styles = soup.find_all('link')
+
+    return (links, images, scripts, styles)
 
 def create_directories(directories, output_path):
     for directory in directories[:-1]:
@@ -35,18 +38,34 @@ def scrape(url, resources, images, output_path):
         resources[url] = False
     if resources[url] == False:
         response = fetch_and_save_resource(url, output_path)
-        (new_resources, new_images) = parse_html(response)
+        (current_resources, current_images, current_scripts, current_styles) = parse_html(response)
 
-        for new_resource in new_resources:
-            if new_resource not in resources:
-                print(f'Found new resource {new_resource}')
-                resources[new_resource] = False
+        for resource in current_resources:
+            if resource not in resources:
+                print(f'Found new resource {resource}')
+                #TODO(Aston): Rename resources-list to pages-list
+                resources[resource] = False
 
-        for new_image in new_images:
-            if new_image not in images:
-                print(f'Found new image {new_image}')
+        for image in current_images:
+            if image not in images:
+                print(f'Found new image {image}')
                 #TODO(Aston): Save the image to a file
-                images.add(new_image)
+                images.add(image)
+
+        for script in current_scripts:
+            if script not in images:
+                print(f'Found new script {script}')
+                #TODO(Aston): Download the script resource
+                #TODO(Aston): Rename images-list to resources-list
+                images.add(script)
+
+        for style in current_styles:
+            if style not in images:
+                print(f'Found new style {style}')
+                #TODO(Aston): Download the style resource
+                images.add(style)
+
+        # The page has been visited
         resources[url] = True
 
 def scrape_website(url, output_path):
