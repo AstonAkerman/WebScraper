@@ -1,6 +1,9 @@
 # Created by WebScraper
 *.html
 *.jpg
+*.ico
+*.css
+*.js
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
