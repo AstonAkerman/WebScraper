@@ -54,7 +54,12 @@ def scrape(home_page, url, pages, resources):
 def save_resource(home_page, url, resource_path, output_path):
     link = home_page + '/' + url + resource_path
     response = do_request(link)
-    open(output_path + '/' + url + resource_path, 'wb').write(response.content)
+    try:
+        with open(output_path + '/' + url + resource_path, 'wb') as file:
+            file.write(response.content)
+    except IOError as err:
+        print(f"Failed to save resource: {err}")
+        return False
     return True
 
 def scrape_website(home_page, output_path):
@@ -90,7 +95,6 @@ def scrape_website(home_page, output_path):
         print(f'| Resources found: ', len(resources))
         print(f'| Pages visited, ', len(pages))
         print(f'{60*'-'}\n')
-    # close the thread pool
     pool.close()
     # block until all tasks are complete and threads close
     pool.join()
@@ -116,9 +120,8 @@ def scrape_website(home_page, output_path):
     for (result) in tqdm(results, desc='Saving resources', unit='resource'):
         result.get()
 
-    # close the thread pool
     pool.close()
     # block until all tasks are complete and threads close
     pool.join()
 
-    print('Finished scraping the website!')
+    print(f'Finished scraping \'{home_page}\'!')
