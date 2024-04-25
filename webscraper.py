@@ -1,8 +1,10 @@
+import multiprocessing
+import threading
 import time
 import requests
-import threading
 
 from bs4 import BeautifulSoup
+from multiprocessing import Manager, Pool
 from tqdm import tqdm
 
 from file_helper import calculate_backsteps, create_directories, save_resource
@@ -20,7 +22,7 @@ def add_resource(resources, url, resource, resource_tag):
     if resource_tag in resource.attrs and not resource[resource_tag].startswith('http'):
             (current_url, current_image_path) = calculate_backsteps(url, resource[resource_tag])    
             if (current_url, current_image_path) not in resources:  
-                resources.add((current_url, current_image_path))
+                resources.append((current_url, current_image_path))
 
 # This function is called by each thread to fetch and save a single resource
 def scrape(home_page, url, pages, resources):
@@ -46,30 +48,31 @@ def scrape_website(home_page, output_path):
     print(f'Scraping {home_page} and saving the output to {output_path}')
 
     # Create a dictionary to store pages, and whether they have already been visited
-    pages = {'' : False} # Add front page
-    remaining_pages = [''] # Add front page
-    resources = set()
+    manager = Manager()
+    pages = manager.dict()
+    pages[''] = False # Add front page
+    remaining_pages = manager.list()
+    remaining_pages.append('') # Add front page
+    resources = manager.list()
     threads = []
     home_page
 
-    # Iterate over the resources and start a new thread for each resource, possibly using a queue for scalability
-    nbr_max_threads = 30
+    # Iterate over the resources and start a new thread for each resource
+    nbr_max_threads = multiprocessing.cpu_count()
+    print('Number of CPU cores: ', nbr_max_threads)
+    pool = Pool(nbr_max_threads)
+
     while remaining_pages:
-        nbr_active_threads = threading.active_count() - 1
-        if (threading.active_count() - 1) < nbr_max_threads:
-            nbr_new_threads = nbr_max_threads - nbr_active_threads
-            for url in remaining_pages[:nbr_new_threads]:
-                if not pages[url]:
-                    thread = threading.Thread(target=scrape, args=(home_page, url, pages, resources))
-                    thread.start()
-                    threads.append(thread)
-        else:
-            time.sleep(2)
+        for url in remaining_pages:
+            if not pages[url]:
+                pool.apply_async(scrape, args=(home_page, url, pages, resources))
+                pages[url] = True
+
+        time.sleep(2)
         remaining_pages = [page for page, is_visited in pages.items() if not is_visited]
 
         print(f'\n{60*'-'}')
         print(f'| Pages in queue: ', len(remaining_pages))
-        print(f'| Threads running: ', threading.active_count() - 1)
         print(f'| Resources in queue: ', len(resources))
         print(f'| Pages visited, ', len(pages))
         print(f'{60*'-'}\n')
