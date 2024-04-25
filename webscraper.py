@@ -23,9 +23,18 @@ def add_resource(resources, url, resource, resource_tag):
             if (current_url, current_image_path) not in resources:  
                 resources.append((current_url, current_image_path))
 
+def do_request(url):
+    try:
+        response = requests.get(url)
+        response.raise_for_status()  # If the request was successful, no Exception will be raised
+    except requests.RequestException as err:
+        print(f"Request failed: {err}")
+        return None
+    return response
+
 # This function is called by each thread to fetch and save a single resource
 def scrape(home_page, url, pages, resources):
-    response = requests.get(home_page + '/' + url)
+    response = do_request(home_page + '/' + url)
     pages[url] = response.content
     (current_pages, current_images, current_scripts, current_styles) = parse_html(response.text)
 
@@ -44,7 +53,7 @@ def scrape(home_page, url, pages, resources):
 
 def save_resource(home_page, url, resource_path, output_path):
     link = home_page + '/' + url + resource_path
-    response = requests.get(link)
+    response = do_request(link)
     open(output_path + '/' + url + resource_path, 'wb').write(response.content)
     return True
 
