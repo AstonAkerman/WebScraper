@@ -1,7 +1,7 @@
 import time
 import os
 import requests
-import threading, queue
+import threading
 
 from bs4 import BeautifulSoup
 from tqdm import tqdm
@@ -22,7 +22,7 @@ def create_directories(directories, output_path):
             if not os.path.exists(output_path):
                 os.makedirs(output_path)
 
-def fetch_and_save_page(home_page, url, output_path):
+def fetch_page(home_page, url, output_path):
     response = requests.get(home_page + '/' + url)
 
     path = (url).split('//')[-1]
@@ -32,7 +32,13 @@ def fetch_and_save_page(home_page, url, output_path):
 
     return response
 
-def fetch_resource(home_page, url, resource_path, output_path):
+def add_resource(resources, url, resource, resource_tag):
+    if resource_tag in resource.attrs and not resource[resource_tag].startswith('http'):
+            (current_url, current_image_path) = calculate_backsteps(url, resource[resource_tag])    
+            if (current_url, current_image_path) not in resources:  
+                resources.add((current_url, current_image_path))
+
+def save_resource(home_page, url, resource_path, output_path):
 
     link = home_page + '/' + url + resource_path
     response = requests.get(link)
@@ -54,7 +60,7 @@ def calculate_backsteps(url, resource_path):
 
 # This function is called by each thread to fetch and save a single resource
 def scrape(home_page, url, pages, resources, output_path):
-    response = fetch_and_save_page(home_page, url, output_path)
+    response = fetch_page(home_page, url, output_path)
     pages[url] = response.content
     (current_pages, current_images, current_scripts, current_styles) = parse_html(response.text)
     for page in current_pages:
@@ -64,22 +70,11 @@ def scrape(home_page, url, pages, resources, output_path):
             pages[current_page] = False    
 
     for image in current_images:
-        if 'src' in image.attrs and not image['src'].startswith('http'):
-            (current_url, current_image_path) = calculate_backsteps(url, image['src'])    
-            if (current_url, current_image_path) not in resources:  
-                resources.add((current_url, current_image_path))
-
+        add_resource(resources, url, image, 'src')
     for script in current_scripts:
-        if 'src' in script.attrs and not script['src'].startswith('http'):
-            (current_url, current_script_path) = calculate_backsteps(url, script['src'])
-            if (current_url, current_script_path) not in resources:
-                resources.add((current_url, current_script_path))
-
+        add_resource(resources, url, script, 'src')
     for style in current_styles:
-        if 'href' in style.attrs and not style['href'].startswith('http'):
-            (current_url, current_style_path) = calculate_backsteps(url, style['href'])
-            if (current_url, current_style_path) not in resources:
-                resources.add((current_url, current_style_path))
+        add_resource(resources, url, style, 'href')
 
 def scrape_website(url, output_path):
     print(f'{25*'-'} WEB SCRAPER {25*'-'}')
@@ -99,9 +94,10 @@ def scrape_website(url, output_path):
         if (threading.active_count() - 1) < nbr_max_threads:
             nbr_new_threads = nbr_max_threads - nbr_active_threads
             for page in remaining_pages[:nbr_new_threads]:
-                thread = threading.Thread(target=scrape, args=(home_page, page, pages, resources, output_path))
-                thread.start()
-                threads.append(thread)
+                if not pages[page]:
+                    thread = threading.Thread(target=scrape, args=(home_page, page, pages, resources, output_path))
+                    thread.start()
+                    threads.append(thread)
         else:
             time.sleep(2)
         remaining_pages = [page for page, is_visited in pages.items() if not is_visited]
@@ -127,4 +123,4 @@ def scrape_website(url, output_path):
         open(output_path + '/' + page, 'wb').write(html)
 
     for (url, resource_path) in tqdm(resources, desc='Fetching resources', unit='resource'):
-        fetch_resource(home_page, url, resource_path, output_path)
+        save_resource(home_page, url, resource_path, output_path)
