@@ -18,12 +18,6 @@ def calculate_backsteps(url, resource_path):
     url = ('/').join(url.split('/')[:-back_steps])
     return (url, resource_path)
 
-def save_resource(home_page, url, resource_path, output_path):
-
-    link = home_page + '/' + url + resource_path
-    response = requests.get(link)
-    
+def create_resource_directory(url, resource_path, output_path):
     path = (url + '/' + resource_path).split('//')[-1]
     create_directories(path.split('/'), output_path)
-
-    open(output_path + '/' + url + resource_path, 'wb').write(response.content)

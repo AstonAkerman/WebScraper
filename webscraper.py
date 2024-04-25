@@ -1,5 +1,4 @@
 import multiprocessing
-import threading
 import time
 import requests
 
@@ -7,7 +6,7 @@ from bs4 import BeautifulSoup
 from multiprocessing import Manager, Pool
 from tqdm import tqdm
 
-from file_helper import calculate_backsteps, create_directories, save_resource
+from file_helper import calculate_backsteps, create_directories, create_resource_directory
 
 def parse_html(html):
     soup = BeautifulSoup(html, 'html.parser')
@@ -43,6 +42,12 @@ def scrape(home_page, url, pages, resources):
     for style in current_styles:
         add_resource(resources, url, style, 'href')
 
+def save_resource(home_page, url, resource_path, output_path):
+    link = home_page + '/' + url + resource_path
+    response = requests.get(link)
+    open(output_path + '/' + url + resource_path, 'wb').write(response.content)
+    return True
+
 def scrape_website(home_page, output_path):
     print(f'{25*'-'} WEB SCRAPER {25*'-'}')
     print(f'Scraping {home_page} and saving the output to {output_path}')
@@ -65,20 +70,21 @@ def scrape_website(home_page, output_path):
     while remaining_pages:
         for url in remaining_pages:
             if not pages[url]:
-                pool.apply_async(scrape, args=(home_page, url, pages, resources))
                 pages[url] = True
+                pool.apply_async(scrape, args=(home_page, url, pages, resources))
 
         time.sleep(2)
         remaining_pages = [page for page, is_visited in pages.items() if not is_visited]
 
         print(f'\n{60*'-'}')
         print(f'| Pages in queue: ', len(remaining_pages))
-        print(f'| Resources in queue: ', len(resources))
+        print(f'| Resources found: ', len(resources))
         print(f'| Pages visited, ', len(pages))
         print(f'{60*'-'}\n')
-
-    for thread in tqdm(threads, desc='Fetching pages', unit='resource'):
-        thread.join()
+    # close the thread pool
+    pool.close()
+    # block until all tasks are complete and threads close
+    pool.join()
 
     for(page, html) in tqdm(pages.items(), desc='Creating page directories', unit='page'):
         if (len(page) > 200):
@@ -90,5 +96,20 @@ def scrape_website(home_page, output_path):
             page = 'index.html'
         open(output_path + '/' + page, 'wb').write(html)
 
-    for (url, resource_path) in tqdm(resources, desc='Fetching resources', unit='resource'):
-        save_resource(home_page, url, resource_path, output_path)
+    for (url, resource_path) in tqdm(resources, desc='Creating resource directories', unit='resource'):
+        create_resource_directory(url, resource_path, output_path)
+
+    pool = Pool(nbr_max_threads)
+    results = []
+    for (url, resource_path) in resources:
+        results.append(pool.apply_async(save_resource, args=(home_page, url, resource_path, output_path)))
+
+    for (result) in tqdm(results, desc='Saving resources', unit='resource'):
+        result.get()
+
+    # close the thread pool
+    pool.close()
+    # block until all tasks are complete and threads close
+    pool.join()
+
+    print('Finished scraping the website!')
