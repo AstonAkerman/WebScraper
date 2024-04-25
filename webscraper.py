@@ -1,6 +1,7 @@
+import time
 import os
 import requests
-import threading
+import threading, queue
 
 from bs4 import BeautifulSoup
 from tqdm import tqdm
@@ -17,77 +18,113 @@ def parse_html(html):
 def create_directories(directories, output_path):
     for directory in directories[:-1]:
         if directory:
-            output_path += directory + '/'
+            output_path += '/' + directory
             if not os.path.exists(output_path):
                 os.makedirs(output_path)
 
-def fetch_and_save_page(url, output_path):
-    response = requests.get(url)
+def fetch_and_save_page(home_page, url, output_path):
+    response = requests.get(home_page + '/' + url)
 
-    domain = url.split('//')[-1]
-    directories = domain.split('/')
+    path = (url).split('//')[-1]
 
-    create_directories(directories, output_path)
+    if url.endswith('/') or not url:
+        url += 'index.html'
 
-    open(output_path + 'index.html', 'wb').write(response.content)
-    return response.text
+    return response
 
-def fetch_resource(url, resource, output_path, html_tag):
-    if html_tag in resource.attrs and not resource[html_tag].startswith('http'):
-        resource_link = resource[html_tag]
-        create_directories(resource_link.split('/'), output_path)
+def fetch_resource(home_page, url, resource_path, output_path):
 
-        response = requests.get(url + resource_link)
-        open(output_path + resource_link, 'wb').write(response.content)
+    link = home_page + '/' + url + resource_path
+    response = requests.get(link)
+    
+    path = (url + '/' + resource_path).split('//')[-1]
+    create_directories(path.split('/'), output_path)
+
+    open(output_path + '/' + url + resource_path, 'wb').write(response.content)
+
+def calculate_backsteps(url, resource_path):
+    back_steps = resource_path.count('../')
+    resource_path = resource_path.replace('../', '')
+
+    if not url.endswith('/'):
+        back_steps += 1
+
+    url = ('/').join(url.split('/')[:-back_steps])
+    return (url, resource_path)
 
 # This function is called by each thread to fetch and save a single resource
-def scrape(url, pages, resources, output_path):
-    if not pages[url]:
-        pages[url] = False
-    if pages[url] == False:
-        response = fetch_and_save_page(url, output_path)
-        (current_pages, current_images, current_scripts, current_styles) = parse_html(response)
+def scrape(home_page, url, pages, resources, output_path):
+    response = fetch_and_save_page(home_page, url, output_path)
+    pages[url] = response.content
+    (current_pages, current_images, current_scripts, current_styles) = parse_html(response.text)
+    for page in current_pages:
+        (current_url, new_path) = calculate_backsteps(url, page['href']) 
+        current_page = current_url + '/' + new_path 
+        if current_page not in pages:
+            pages[current_page] = False    
 
-        for resource in current_pages:
-            if resource not in pages:
-                pages[resource] = False
+    for image in current_images:
+        if 'src' in image.attrs and not image['src'].startswith('http'):
+            (current_url, current_image_path) = calculate_backsteps(url, image['src'])    
+            if (current_url, current_image_path) not in resources:  
+                resources.add((current_url, current_image_path))
 
-        for image in current_images:
-            if image not in resources:
-                fetch_resource(url, image, output_path, 'src')      
-                resources.add(image)
+    for script in current_scripts:
+        if 'src' in script.attrs and not script['src'].startswith('http'):
+            (current_url, current_script_path) = calculate_backsteps(url, script['src'])
+            if (current_url, current_script_path) not in resources:
+                resources.add((current_url, current_script_path))
 
-        for script in current_scripts:
-            if script not in resources:
-                fetch_resource(url, script, output_path, 'src')
-                resources.add(script)
-
-        for style in current_styles:
-            if style not in resources:
-                fetch_resource(url, style, output_path, 'href')
-                resources.add(style)
-
-        # The page has been visited
-        pages[url] = True
+    for style in current_styles:
+        if 'href' in style.attrs and not style['href'].startswith('http'):
+            (current_url, current_style_path) = calculate_backsteps(url, style['href'])
+            if (current_url, current_style_path) not in resources:
+                resources.add((current_url, current_style_path))
 
 def scrape_website(url, output_path):
     print(f'{25*'-'} WEB SCRAPER {25*'-'}')
     print(f'Scraping {url} and saving the output to {output_path}')
 
-    # Create a dictionary to store resources, and whether they have already been visited
-    pages = {url : False} # Add front page
-    remainingPages = [url]
+    # Create a dictionary to store pages, and whether they have already been visited
+    pages = {'' : False} # Add front page
+    remaining_pages = [''] # Add front page
     resources = set()
     threads = []
+    home_page = url
 
     # Iterate over the resources and start a new thread for each resource, possibly using a queue for scalability
-    #TODO(Aston): Add traversal through whole website (while remainingResources: )
-    for page in remainingPages:
-        print(f'Fetching resource {page}')
-        thread = threading.Thread(target=scrape, args=(page, pages, resources, output_path))
-        thread.start()
-        threads.append(thread)
-    remainingPages = [page for page, is_visited in pages.items() if not is_visited]
+    nbr_max_threads = 30
+    while remaining_pages:
+        nbr_active_threads = threading.active_count() - 1
+        if (threading.active_count() - 1) < nbr_max_threads:
+            nbr_new_threads = nbr_max_threads - nbr_active_threads
+            for page in remaining_pages[:nbr_new_threads]:
+                thread = threading.Thread(target=scrape, args=(home_page, page, pages, resources, output_path))
+                thread.start()
+                threads.append(thread)
+        else:
+            time.sleep(2)
+        remaining_pages = [page for page, is_visited in pages.items() if not is_visited]
 
-    for thread in tqdm(threads, desc='Fetching resources', unit='resource'):
+        print(f'\n{60*'-'}')
+        print(f'| Pages in queue: ', len(remaining_pages))
+        print(f'| Threads running: ', threading.active_count() - 1)
+        print(f'| Resources in queue: ', len(resources))
+        print(f'| Pages visited, ', len(pages))
+        print(f'{60*'-'}\n')
+
+    for thread in tqdm(threads, desc='Fetching pages', unit='resource'):
         thread.join()
+
+    for(page, html) in tqdm(pages.items(), desc='Creating page directories', unit='page'):
+        if (len(page) > 200):
+            # Python cannot create directories for very long paths.
+            # see: https://stackoverflow.com/a/61628356
+            continue
+        create_directories(page.split('/'), output_path)
+        if page == '':
+            page = 'index.html'
+        open(output_path + '/' + page, 'wb').write(html)
+
+    for (url, resource_path) in tqdm(resources, desc='Fetching resources', unit='resource'):
+        fetch_resource(home_page, url, resource_path, output_path)

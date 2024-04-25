@@ -12,7 +12,7 @@ def create_output_path(url, output_path):
     domain = url.split('//')[-1]
     output_directory = output_path + '/' + domain
     if os.path.exists(output_directory):
-        input(f'The output path {output_directory} already exists. Press Enter to overwrite the directory and continue, or Ctrl+C to cancel')
+        input(f'The output path \'{output_directory}\' already exists. Press Enter to overwrite the directory and continue, or Ctrl+C to cancel')
         shutil.rmtree(output_directory)
     os.makedirs(output_directory)
     return output_directory
