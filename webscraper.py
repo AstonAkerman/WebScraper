@@ -17,12 +17,6 @@ def parse_html(html):
 
     return (links, images, scripts, styles)
 
-def add_resource(resources, url, resource, resource_tag):
-    if resource_tag in resource.attrs and not resource[resource_tag].startswith('http'):
-            (current_url, current_image_path) = calculate_backsteps(url, resource[resource_tag])    
-            if (current_url, current_image_path) not in resources:  
-                resources.append((current_url, current_image_path))
-
 def do_request(url):
     try:
         response = requests.get(url)
@@ -32,24 +26,11 @@ def do_request(url):
         return None
     return response
 
-# This function is called by each thread to fetch and save a single resource
-def scrape(home_page, url, pages, resources):
-    response = do_request(home_page + '/' + url)
-    pages[url] = response.content
-    (current_pages, current_images, current_scripts, current_styles) = parse_html(response.text)
-
-    for page in current_pages:
-        (current_url, new_path) = calculate_backsteps(url, page['href']) 
-        current_page = current_url + '/' + new_path 
-        if current_page not in pages:
-            pages[current_page] = False    
-
-    for image in current_images:
-        add_resource(resources, url, image, 'src')
-    for script in current_scripts:
-        add_resource(resources, url, script, 'src')
-    for style in current_styles:
-        add_resource(resources, url, style, 'href')
+def add_resource(resources, url, resource, resource_tag):
+    if resource_tag in resource.attrs and not resource[resource_tag].startswith('http'):
+            (current_url, current_image_path) = calculate_backsteps(url, resource[resource_tag])    
+            if (current_url, current_image_path) not in resources:  
+                resources.append((current_url, current_image_path))
 
 def save_resource(home_page, url, resource_path, output_path):
     link = home_page + '/' + url + resource_path
@@ -61,6 +42,25 @@ def save_resource(home_page, url, resource_path, output_path):
         print(f"Failed to save resource: {err}")
         return False
     return True
+
+# This function is called by each thread to fetch and save a single resource
+def scrape(home_page, url, pages, resources):
+    response = do_request(home_page + '/' + url)
+    pages[url] = response.content
+    (current_pages, current_images, current_scripts, current_styles) = parse_html(response.text)
+
+    for page in current_pages:
+        (current_url, new_path) = calculate_backsteps(url, page['href']) 
+        current_page = current_url + '/' + new_path 
+        if current_page not in pages:
+            pages[current_page] = False
+
+    for image in current_images:
+        add_resource(resources, url, image, 'src')
+    for script in current_scripts:
+        add_resource(resources, url, script, 'src')
+    for style in current_styles:
+        add_resource(resources, url, style, 'href')
 
 def scrape_website(home_page, output_path):
     print(f'{25*'-'} WEB SCRAPER {25*'-'}')
@@ -93,7 +93,7 @@ def scrape_website(home_page, output_path):
         print(f'\n{60*'-'}')
         print(f'| Pages in queue: ', len(remaining_pages))
         print(f'| Resources found: ', len(resources))
-        print(f'| Pages visited, ', len(pages))
+        print(f'| Pages visited: ', len(pages))
         print(f'{60*'-'}\n')
     pool.close()
     # block until all tasks are complete and threads close
