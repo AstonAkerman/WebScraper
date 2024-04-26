@@ -43,6 +43,16 @@ def save_resource(home_page, url, resource_path, output_path):
         return False
     return True
 
+def save_page(output_path, page, html):
+    if (len(page) > 200):
+        # Python cannot create directories in Windows for very long paths.
+        # see: https://stackoverflow.com/a/61628356
+        return
+    create_directories(page.split('/'), output_path)
+    if page == '':
+        page = 'index.html'
+    open(output_path + '/' + page, 'wb').write(html)
+
 # This function is called by each thread to fetch and save a single resource
 def scrape(home_page, url, pages, resources):
     response = do_request(home_page + '/' + url)
@@ -63,7 +73,6 @@ def scrape(home_page, url, pages, resources):
         add_resource(resources, url, style, 'href')
 
 def scrape_website(home_page, output_path):
-    print(f'{25*'-'} WEB SCRAPER {25*'-'}')
     print(f'Scraping {home_page} and saving the output to {output_path}')
 
     # Create a dictionary to store pages, and whether they have already been visited
@@ -73,7 +82,7 @@ def scrape_website(home_page, output_path):
     remaining_pages = manager.list()
     remaining_pages.append('') # Add front page
     resources = manager.list()
-    threads = []
+    results = []
     home_page
 
     # Iterate over the resources and start a new thread for each resource
@@ -86,30 +95,27 @@ def scrape_website(home_page, output_path):
         for url in remaining_pages:
             if not pages[url]:
                 pages[url] = True
-                pool.apply_async(scrape, args=(home_page, url, pages, resources))
+                result = pool.apply_async(scrape, args=(home_page, url, pages, resources))
+                results.append(result)
 
-        time.sleep(2)
         remaining_pages = [page for page, is_visited in pages.items() if not is_visited]
-
+        
         print(f'\n{60*'-'}')
-        print(f'| Pages in queue: ', len(remaining_pages))
         print(f'| Resources found: ', len(resources))
         print(f'| Pages visited: ', len(pages))
         print(f'{60*'-'}\n')
+        # If there are no current remaining pages to visit, make sure that current threads do not find new pages
+        if len(remaining_pages) == 0:
+            [results.wait() for results in results]
+            remaining_pages = [page for page, is_visited in pages.items() if not is_visited]
+
     pool.close()
     # block until all tasks are complete and threads close
     pool.join()
 
     # Create all directories for the web pages, and save the pages
     for(page, html) in tqdm(pages.items(), desc='Creating page directories', unit='page'):
-        if (len(page) > 200):
-            # Python cannot create directories for very long paths.
-            # see: https://stackoverflow.com/a/61628356
-            continue
-        create_directories(page.split('/'), output_path)
-        if page == '':
-            page = 'index.html'
-        open(output_path + '/' + page, 'wb').write(html)
+        save_page(output_path, page, html)
 
     for (url, resource_path) in tqdm(resources, desc='Creating resource directories', unit='resource'):
         create_resource_directory(url, resource_path, output_path)
