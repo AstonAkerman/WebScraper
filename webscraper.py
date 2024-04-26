@@ -81,6 +81,7 @@ def scrape_website(home_page, output_path):
     print('Number of CPU cores: ', nbr_max_threads)
     pool = Pool(nbr_max_threads)
 
+    # Explore the website and find all resources
     while remaining_pages:
         for url in remaining_pages:
             if not pages[url]:
@@ -99,6 +100,7 @@ def scrape_website(home_page, output_path):
     # block until all tasks are complete and threads close
     pool.join()
 
+    # Create all directories for the web pages, and save the pages
     for(page, html) in tqdm(pages.items(), desc='Creating page directories', unit='page'):
         if (len(page) > 200):
             # Python cannot create directories for very long paths.
@@ -112,6 +114,7 @@ def scrape_website(home_page, output_path):
     for (url, resource_path) in tqdm(resources, desc='Creating resource directories', unit='resource'):
         create_resource_directory(url, resource_path, output_path)
 
+    # Fetch and save all resources (images, script resources, styles)
     pool = Pool(nbr_max_threads)
     results = []
     for (url, resource_path) in resources:
