@@ -5,7 +5,7 @@ Be aware that running a webscraper on a website without permission can be interp
 
 # Installation
 
-WebScraper was created for Windows OS, and have thus not been tested on other operating system softwares.
+WebScraper was created for Windows OS, and has thus not been tested on other operating system softwares.
 
 I recommend using [Anaconda](https://www.anaconda.com/distribution/) or the light-weight version [Miniconda](https://docs.conda.io/en/latest/miniconda.html) to make sure that the correct dependencies are installed. Once installed, create an environment by running the following command. The environment will contain all libraries needed to run the program with default settings. By default, the environment will be named `webscraper`, but you can choose another name using the `-n` option.
 
